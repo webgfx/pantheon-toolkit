@@ -10,6 +10,7 @@ class PerformanceAnalyzer {
         this.cacheTimestamp = null; // Track when data was cached
         this.isVisible = false; // Track visibility state
         this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+        this.escListenerAdded = false; // Track ESC key listener
         
         this.init();
     }
@@ -414,7 +415,7 @@ class PerformanceAnalyzer {
                 </button>
                 <div class="perf-analyzer-header">
                     <div class="perf-analyzer-title">
-                        <h2>📊 Performance Analysis Results</h2>
+                        <h2>📊 Performance Results</h2>
                         <div class="perf-analyzer-stats" id="perf-stats"></div>
                     </div>
                     <div class="perf-analyzer-controls">
@@ -797,8 +798,8 @@ perfAnalyzer.extractData()
             exportBtn.addEventListener('click', () => this.exportToExcel());
             exportBtn.setAttribute('data-listener-added', 'true');
             
-            // Update button text based on XLSX availability
-            if (typeof XLSX === 'undefined') {
+            // Update button text based on ExcelJS availability
+            if (typeof ExcelJS === 'undefined') {
                 exportBtn.textContent = '❌ Excel (Library Missing)';
                 exportBtn.disabled = true;
                 exportBtn.title = 'Excel export library not loaded';
@@ -808,6 +809,20 @@ perfAnalyzer.extractData()
                 exportBtn.title = 'Export to Excel';
                 console.log('✅ Excel export button ready');
             }
+        }
+        
+        // Add ESC key listener to close the popup
+        if (!this.escListenerAdded) {
+            const escKeyHandler = (event) => {
+                // Only close if popup is visible and ESC key is pressed
+                if (event.key === 'Escape' && this.isVisible) {
+                    this.closeResults();
+                }
+            };
+            
+            document.addEventListener('keydown', escKeyHandler);
+            this.escListenerAdded = true;
+            console.log('✅ ESC key listener added - press ESC to close popup');
         }
     }
 
@@ -1668,60 +1683,85 @@ perfAnalyzer.extractData()
     }
 
     async exportToExcel() {
-        // Check if XLSX library is available
-        if (typeof XLSX === 'undefined') {
-            console.error('❌ XLSX library not loaded');
-            alert('Excel export library is not available. Please reload the page and try again.');
+        // Check if ExcelJS library is available
+        if (typeof ExcelJS === 'undefined') {
+            console.error('❌ ExcelJS library not loaded');
             return;
         }
 
         if (!this.dataCache || (!this.regressionArray.length && !this.improvementArray.length)) {
-            alert('No data available to export. Please analyze performance data first.');
+            console.log('No data available to export');
             return;
         }
 
-        console.log('📊 Starting Excel export with XLSX library');
+        console.log('📊 Starting Excel export with ExcelJS library');
 
         try {
             // Create a new workbook
-            const workbook = XLSX.utils.book_new();
+            const workbook = new ExcelJS.Workbook();
+            
+            // Set workbook properties
+            workbook.creator = 'Pantheon Toolkit';
+            workbook.lastModifiedBy = 'Pantheon Toolkit';
+            workbook.created = new Date();
+            workbook.modified = new Date();
 
-            // Prepare regression data
-            const regressionData = this.regressionArray.map(item => ({
-                'Benchmark': item.benchmark,
-                'Story': item.story,
-                'Metric': item.metric,
-                'Group': item.group,
-                'Percent Change': item.percentChange + '%',
-                'Baseline Value': item.baselineValue,
-                'Comparison Value': item.comparisonValue,
-                'Unit': item.unit,
-                'Type': 'Regression'
-            }));
-
-            // Prepare improvement data
-            const improvementData = this.improvementArray.map(item => ({
-                'Benchmark': item.benchmark,
-                'Story': item.story,
-                'Metric': item.metric,
-                'Group': item.group,
-                'Percent Change': item.percentChange + '%',
-                'Baseline Value': item.baselineValue,
-                'Comparison Value': item.comparisonValue,
-                'Unit': item.unit,
-                'Type': 'Improvement'
-            }));
-
-            // Create worksheets
-            if (regressionData.length > 0) {
-                const regressionSheet = XLSX.utils.json_to_sheet(regressionData);
+            // Create regressions sheet
+            if (this.regressionArray.length > 0) {
+                const regressionSheet = workbook.addWorksheet('P0 Regressions');
                 
-                // Set column widths for better readability
-                regressionSheet['!cols'] = [
-                    { width: 25 }, // Benchmark
-                    { width: 20 }, // Story
-                    { width: 20 }, // Metric
-                    { width: 15 }, // Group
+                // Add headers
+                const headers = ['Benchmark', 'Story', 'Metric', 'Group', 'Percent Change', 'Baseline Value', 'Comparison Value', 'Unit', 'Type'];
+                const headerRow = regressionSheet.addRow(headers);
+                
+                // Style the header row
+                headerRow.eachCell((cell) => {
+                    cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: '366092' }
+                    };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                });
+                
+                // Add data rows
+                this.regressionArray.forEach(item => {
+                    const row = regressionSheet.addRow([
+                        item.benchmark,
+                        item.story,
+                        item.metric,
+                        item.group,
+                        item.percentChange + '%',
+                        item.baselineValue,
+                        item.comparisonValue,
+                        item.unit,
+                        'Regression'
+                    ]);
+                    
+                    // Style data rows
+                    row.eachCell((cell) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                    });
+                });
+                
+                // Set column widths
+                regressionSheet.columns = [
+                    { width: 30 }, // Benchmark
+                    { width: 25 }, // Story
+                    { width: 35 }, // Metric
+                    { width: 20 }, // Group
                     { width: 15 }, // Percent Change
                     { width: 15 }, // Baseline Value
                     { width: 15 }, // Comparison Value
@@ -1729,39 +1769,68 @@ perfAnalyzer.extractData()
                     { width: 12 }  // Type
                 ];
                 
-                // Freeze the first row (header)
-                regressionSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
+                // Freeze the header row
+                regressionSheet.views = [{ state: 'frozen', ySplit: 1 }];
                 
-                // Make header row bold - ensure style object exists first
-                const headerCells = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'I1'];
-                headerCells.forEach(cellRef => {
-                    if (regressionSheet[cellRef]) {
-                        // Initialize style object if it doesn't exist
-                        if (!regressionSheet[cellRef].s) {
-                            regressionSheet[cellRef].s = {};
-                        }
-                        if (!regressionSheet[cellRef].s.font) {
-                            regressionSheet[cellRef].s.font = {};
-                        }
-                        regressionSheet[cellRef].s.font.bold = true;
-                        
-                        console.log(`✅ Applied bold formatting to regression header cell ${cellRef}`);
-                    }
-                });
-                
-                XLSX.utils.book_append_sheet(workbook, regressionSheet, 'P0 Regressions');
                 console.log('📊 Added regressions sheet with formatting');
             }
 
-            if (improvementData.length > 0) {
-                const improvementSheet = XLSX.utils.json_to_sheet(improvementData);
+            // Create improvements sheet
+            if (this.improvementArray.length > 0) {
+                const improvementSheet = workbook.addWorksheet('P0 Improvements');
                 
-                // Set column widths for better readability
-                improvementSheet['!cols'] = [
-                    { width: 25 }, // Benchmark
-                    { width: 20 }, // Story
-                    { width: 20 }, // Metric
-                    { width: 15 }, // Group
+                // Add headers
+                const headers = ['Benchmark', 'Story', 'Metric', 'Group', 'Percent Change', 'Baseline Value', 'Comparison Value', 'Unit', 'Type'];
+                const headerRow = improvementSheet.addRow(headers);
+                
+                // Style the header row
+                headerRow.eachCell((cell) => {
+                    cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: '70AD47' }
+                    };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                });
+                
+                // Add data rows
+                this.improvementArray.forEach(item => {
+                    const row = improvementSheet.addRow([
+                        item.benchmark,
+                        item.story,
+                        item.metric,
+                        item.group,
+                        item.percentChange + '%',
+                        item.baselineValue,
+                        item.comparisonValue,
+                        item.unit,
+                        'Improvement'
+                    ]);
+                    
+                    // Style data rows
+                    row.eachCell((cell) => {
+                        cell.border = {
+                            top: { style: 'thin' },
+                            left: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                    });
+                });
+                
+                // Set column widths
+                improvementSheet.columns = [
+                    { width: 30 }, // Benchmark
+                    { width: 25 }, // Story
+                    { width: 35 }, // Metric
+                    { width: 20 }, // Group
                     { width: 15 }, // Percent Change
                     { width: 15 }, // Baseline Value
                     { width: 15 }, // Comparison Value
@@ -1769,108 +1838,87 @@ perfAnalyzer.extractData()
                     { width: 12 }  // Type
                 ];
                 
-                // Freeze the first row (header)
-                improvementSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
+                // Freeze the header row
+                improvementSheet.views = [{ state: 'frozen', ySplit: 1 }];
                 
-                // Make header row bold - ensure style object exists first
-                const headerCells = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'I1'];
-                headerCells.forEach(cellRef => {
-                    if (improvementSheet[cellRef]) {
-                        // Initialize style object if it doesn't exist
-                        if (!improvementSheet[cellRef].s) {
-                            improvementSheet[cellRef].s = {};
-                        }
-                        if (!improvementSheet[cellRef].s.font) {
-                            improvementSheet[cellRef].s.font = {};
-                        }
-                        improvementSheet[cellRef].s.font.bold = true;
-                        
-                        console.log(`✅ Applied bold formatting to improvement header cell ${cellRef}`);
-                    }
-                });
-                
-                XLSX.utils.book_append_sheet(workbook, improvementSheet, 'P0 Improvements');
                 console.log('📊 Added improvements sheet with formatting');
             }
 
             // Create summary sheet
-            const summaryData = [
-                { 'Category': 'P0 Regressions', 'Count': this.regressionArray.length },
-                { 'Category': 'P0 Improvements', 'Count': this.improvementArray.length },
-                { 'Category': 'Total Items', 'Count': this.regressionArray.length + this.improvementArray.length },
-                { 'Category': 'Export Date', 'Count': new Date().toLocaleString() },
-                { 'Category': 'Source URL', 'Count': window.location.href }
-            ];
+            const summarySheet = workbook.addWorksheet('Summary');
             
-            const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-            summarySheet['!cols'] = [{ width: 20 }, { width: 50 }];
+            // Add title
+            const titleRow = summarySheet.addRow(['Pantheon Toolkit Export Summary']);
+            titleRow.getCell(1).font = { size: 16, bold: true };
+            titleRow.height = 25;
             
-            // Freeze the first row (header) and make it bold
-            summarySheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
-            const summaryHeaderCells = ['A1', 'B1'];
-            summaryHeaderCells.forEach(cellRef => {
-                if (summarySheet[cellRef]) {
-                    // Initialize style object if it doesn't exist
-                    if (!summarySheet[cellRef].s) {
-                        summarySheet[cellRef].s = {};
-                    }
-                    if (!summarySheet[cellRef].s.font) {
-                        summarySheet[cellRef].s.font = {};
-                    }
-                    summarySheet[cellRef].s.font.bold = true;
-                    
-                    console.log(`✅ Applied bold formatting to summary header cell ${cellRef}`);
-                }
+            // Add empty row
+            summarySheet.addRow([]);
+            
+            // Add summary data with headers
+            const summaryHeaderRow = summarySheet.addRow(['Category', 'Count']);
+            summaryHeaderRow.eachCell((cell) => {
+                cell.font = { bold: true };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'F2F2F2' }
+                };
             });
             
-            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+            summarySheet.addRow(['P0 Regressions', this.regressionArray.length]);
+            summarySheet.addRow(['P0 Improvements', this.improvementArray.length]);
+            summarySheet.addRow(['Total Items', this.regressionArray.length + this.improvementArray.length]);
+            summarySheet.addRow(['Export Date', new Date().toLocaleString()]);
+            summarySheet.addRow(['Source URL', window.location.href]);
+            
+            // Set column widths for summary
+            summarySheet.columns = [
+                { width: 25 },
+                { width: 50 }
+            ];
 
             // Generate filename with timestamp
             const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
             const filename = `Pantheon_Performance_Analysis_${timestamp}.xlsx`;
 
-            // Use chrome.downloads API for better file saving experience
+            // Generate Excel file buffer
+            const buffer = await workbook.xlsx.writeBuffer();
+            
+            // Create blob and download
+            const blob = new Blob([buffer], { 
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+            
+            // Use chrome.downloads API if available
             if (chrome && chrome.downloads) {
-                // Convert workbook to array buffer
-                const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                
-                // Create object URL
                 const url = URL.createObjectURL(blob);
                 
-                // Use Chrome downloads API to show save dialog
                 chrome.downloads.download({
                     url: url,
                     filename: filename,
-                    saveAs: true // This will show the save dialog
+                    saveAs: true
                 }, (downloadId) => {
                     if (chrome.runtime.lastError) {
                         console.error('Download error:', chrome.runtime.lastError);
-                        // Fallback to direct download
-                        this.fallbackDownload(workbook, filename);
+                        this.fallbackDownload(blob, filename);
                     } else {
                         console.log('📁 Excel file download started:', filename);
-                        // Clean up the object URL after a short delay
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                     }
                 });
             } else {
-                // Fallback for browsers without chrome.downloads API
-                this.fallbackDownload(workbook, filename);
+                // Fallback download
+                this.fallbackDownload(blob, filename);
             }
 
         } catch (error) {
             console.error('❌ Error exporting to Excel:', error);
-            alert('Failed to export Excel file. Please try again.');
         }
     }
 
-    fallbackDownload(workbook, filename) {
+    fallbackDownload(blob, filename) {
         // Fallback download method
-        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        
-        // Create download link
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;

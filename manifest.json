@@ -14,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://edgeteam.ms/perf-lab/perf-comparison-requests/details/*"],
-      "js": ["xlsx.min.js", "content.js"],
+      "js": ["exceljs.min.js", "content.js"],
       "css": ["styles.css"]
     }
   ],
