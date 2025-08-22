@@ -88,7 +88,150 @@ pantheon-toolkit/
 │   ├── icon16.png         # 16x16 icon
 │   ├── icon48.png         # 48x48 icon
 │   └── icon128.png        # 128x128 icon
-└── README.md              # This file
+└── # Pantheon Toolkit 🧪
+
+A Chrome/Edge browser extension for extracting and analyzing P0 performance regression and improvement data from edgeteam.ms performance comparison pages.
+
+## ✨ Features
+
+- **📊 Data Extraction**: Automatically extracts P0 regression and improvement data with pagination support
+- **📋 Excel Export**: Export data to Excel format with separate sheets for regressions and improvements
+- **📁 Folder Selection**: Choose your preferred download location
+- **🎯 Tab Interface**: Switch between regressions and improvements views
+- **📱 Draggable UI**: Movable "Get Results" button that remembers position
+- **⚡ Smart Caching**: 5-minute data cache for instant results
+- **📊 Sortable Tables**: Click column headers to sort data
+- **🎨 Modern UI**: Glass-morphism design with responsive layout
+
+## 🚀 Quick Installation
+
+### For Chrome:
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top right)
+3. Click "Load unpacked"
+4. Select the `pantheon-toolkit` folder
+5. Extension installed! ✅
+
+### For Edge:
+1. Open Edge and navigate to `edge://extensions/`
+2. Enable "Developer mode" (toggle in left sidebar)
+3. Click "Load unpacked"
+4. Select the `pantheon-toolkit` folder
+5. Extension installed! ✅
+
+## 📖 How to Use
+
+1. **Navigate** to a performance comparison page:
+   ```
+   https://edgeteam.ms/perf-lab/perf-comparison-requests/details/...
+   ```
+
+2. **Click** the draggable "📊 Get Results" button (purple, top-right corner)
+
+3. **Wait** for automatic data extraction (handles pagination)
+
+4. **View Results** in tabs:
+   - **⬇️ Regressions** (default): P0 performance regressions
+   - **⬆️ Improvements**: P0 performance improvements
+
+5. **Export Data** using the "📋 Export Excel" button:
+   - Creates multi-sheet Excel file
+   - Choose download location
+   - Includes summary sheet with metadata
+
+## 📊 Excel Export Features
+
+- **Multi-sheet workbook**: Separate sheets for regressions, improvements, and summary
+- **Rich data format**: Benchmark, Story, Metric, Group, Change %, Baseline, Comparison, Unit
+- **Auto-sized columns**: Optimized for readability
+- **Timestamped filenames**: `Pantheon_Performance_Analysis_YYYY-MM-DD-HH-MM-SS.xlsx`
+- **Metadata included**: Export date, source URL, item counts
+
+## 🎨 UI Features
+
+- **Draggable Button**: Drag the "Get Results" button anywhere on the page
+- **Position Memory**: Button remembers its position across page loads
+- **Modern Design**: Glass-morphism effects with smooth animations
+- **Responsive Layout**: Works on desktop and mobile browsers
+- **Smart Caching**: Data cached for 5 minutes to avoid re-extraction
+- **Sortable Tables**: Click any column header to sort data
+
+## 🔧 Technical Details
+
+- **Manifest V3**: Modern Chrome/Edge extension standard
+- **Content Scripts**: DOM manipulation for data extraction
+- **XLSX Library**: Local SheetJS library for Excel generation
+- **Chrome Downloads API**: Native save dialog for file downloads
+- **Microsoft UI Framework**: Compatible with edgeteam.ms page structure
+- **Local Storage**: Persistent button positioning
+
+## 📁 File Structure
+
+```
+pantheon-toolkit/
+├── manifest.json          # Extension configuration
+├── content.js            # Main extension logic
+├── styles.css           # Modern UI styling
+├── xlsx.min.js          # Excel generation library
+├── popup.html           # Extension popup interface
+├── popup.js             # Popup logic
+├── icons/               # Extension icons
+│   ├── icon16.png
+│   ├── icon48.png
+│   └── icon128.png
+├── README.md            # This file
+└── INSTALL.md           # Quick installation guide
+```
+
+## 🛠️ Development
+
+### Requirements:
+- Chrome/Edge browser with developer mode
+- Access to edgeteam.ms performance comparison pages
+
+### Key Components:
+- **PerformanceAnalyzer Class**: Main logic for data extraction and UI
+- **Pagination Handler**: Automatic navigation through result pages
+- **Cache System**: 5-minute data cache with timestamp validation
+- **Drag System**: Full mouse/touch drag functionality with constraints
+- **Excel Export**: SheetJS integration with Chrome downloads API
+
+## 🐛 Troubleshooting
+
+### Common Issues:
+
+1. **"No data found"**: Page may still be loading. Wait and try again.
+2. **Export button disabled**: Extension is loading. Refresh the page.
+3. **Button not appearing**: Ensure you're on the correct URL pattern.
+4. **Data incomplete**: Extension handles pagination automatically.
+
+### Debug Features:
+- Console logging for all operations
+- Error handling with user-friendly messages
+- Debug buttons available in development mode
+
+## 📝 Changelog
+
+### Version 1.0.0
+- ✅ Data extraction with pagination support
+- ✅ Tab interface for regressions/improvements
+- ✅ Excel export with multi-sheet support
+- ✅ Draggable UI with position memory
+- ✅ Smart caching system
+- ✅ Modern responsive design
+- ✅ Local XLSX library integration
+
+## 🎯 Future Enhancements
+
+- 📈 Data visualization charts
+- 🔍 Advanced filtering options
+- 📊 Historical data comparison
+- 🎨 Customizable themes
+- 📱 Mobile app companion
+
+---
+
+**Made with ❤️ for the Microsoft Edge Performance Team**              # This file
 ```
 
 ## Development

@@ -9,6 +9,8 @@ class PerformanceAnalyzer {
         this.dataCache = null; // Cache for extracted data
         this.cacheTimestamp = null; // Track when data was cached
         this.isVisible = false; // Track visibility state
+        this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+        
         this.init();
     }
 
@@ -17,6 +19,9 @@ class PerformanceAnalyzer {
         if (!window.location.href.includes('edgeteam.ms/perf-lab/perf-comparison-requests/details/')) {
             return;
         }
+
+        console.log('📊 Pantheon Toolkit initializing...');
+        console.log('📋 XLSX library available:', typeof XLSX !== 'undefined');
 
         // Wait for page to load
         if (document.readyState === 'loading') {
@@ -32,20 +37,240 @@ class PerformanceAnalyzer {
         
         // Create results container
         this.createResultsContainer();
+        
+        // Start background data fetching immediately
+        this.startBackgroundDataFetch();
+    }
+
+    startBackgroundDataFetch() {
+        console.log('🚀 Starting background data fetch...');
+        
+        // Check if we have cached data that's still valid
+        const now = Date.now();
+        if (this.dataCache && this.cacheTimestamp && (now - this.cacheTimestamp < this.cacheTimeout)) {
+            console.log('📋 Using cached data from background');
+            // Update button to show data is ready
+            const button = document.getElementById('perf-analyzer-btn');
+            if (button) {
+                button.innerHTML = '📊 View Results';
+                button.classList.remove('fetching', 'retry', 'error');
+                button.classList.add('data-ready');
+            }
+            return;
+        }
+        
+        // Start fetching data in background with a longer delay to ensure page is loaded
+        setTimeout(() => {
+            this.fetchDataInBackground();
+        }, 5000); // Increased from 2 seconds to 5 seconds for better reliability
+    }
+
+    updateProgress(percentage, message = 'Fetching Results') {
+        const button = document.getElementById('perf-analyzer-btn');
+        if (button && button.classList.contains('fetching')) {
+            button.innerHTML = `⏳ ${message}... ${percentage}%`;
+        }
+    }
+
+    async fetchDataInBackground() {
+        if (this.isAnalyzing) {
+            console.log('⏳ Data extraction already in progress');
+            return;
+        }
+
+        try {
+            console.log('📊 Background data extraction starting...');
+            this.isAnalyzing = true;
+            
+            // Update button to show background processing
+            const button = document.getElementById('perf-analyzer-btn');
+            if (button) {
+                button.innerHTML = '⏳ Fetching Results... 0%';
+                button.classList.add('fetching');
+                button.classList.remove('data-ready');
+            }
+
+            // Extract data using the same method
+            console.log('🔍 Calling extractData method...');
+            const result = await this.extractData();
+            console.log('📋 ExtractData result:', result);
+            
+            if (result && result.success) {
+                this.dataCache = {
+                    improvements: result.improvements || [],
+                    regressions: result.regressions || []
+                };
+                this.cacheTimestamp = Date.now();
+                
+                this.improvementArray = result.improvements || [];
+                this.regressionArray = result.regressions || [];
+                
+                console.log(`✅ Background fetch complete: ${this.regressionArray.length} regressions, ${this.improvementArray.length} improvements`);
+                
+                // Update button to show data is ready
+                if (button) {
+                    button.innerHTML = '📊 View Results';
+                    button.classList.remove('fetching', 'retry', 'error');
+                    button.classList.add('data-ready');
+                    console.log('🔄 Button updated to "View Results"');
+                }
+            } else {
+                console.log('❌ Background fetch failed:', result ? result.message : 'No result returned');
+                
+                // Diagnose the problem
+                const pageIndicator = document.querySelector('[data-automation-id="DetailsRow"] [data-automation-key="PageIndicator"]');
+                const improvementElements = document.querySelectorAll('.ms-List-page .ms-DetailsRow-cell');
+                const spinnerElement = document.querySelector('.ms-Spinner');
+                
+                console.log('� Diagnostic information:');
+                console.log('  Page indicator found:', !!pageIndicator, pageIndicator?.textContent?.trim());
+                console.log('  Improvement elements found:', improvementElements.length);
+                console.log('  Spinner active:', !!spinnerElement);
+                console.log('  Document ready state:', document.readyState);
+                console.log('  Page URL:', window.location.href);
+                
+                // Change button to allow retry
+                if (button) {
+                    button.innerHTML = '🔄 Retry Results';
+                    button.classList.remove('fetching');
+                    button.classList.add('data-ready', 'retry');
+                    console.log('🔄 Button changed to "Retry Results" - user can click to try again');
+                }
+            }
+        } catch (error) {
+            console.error('❌ Background fetch error:', error);
+            console.error('Error stack:', error.stack);
+            
+            // Change button to allow retry
+            const button = document.getElementById('perf-analyzer-btn');
+            if (button) {
+                button.innerHTML = '⚠️ Error - Retry';
+                button.classList.remove('fetching');
+                button.classList.add('data-ready', 'error');
+                console.log('🔄 Error occurred - button changed to allow retry');
+            }
+        } finally {
+            this.isAnalyzing = false;
+            console.log('🏁 Background fetch finally block - isAnalyzing set to false');
+        }
     }
 
     createFloatingButton() {
         const button = document.createElement('button');
         button.id = 'perf-analyzer-btn';
-        button.innerHTML = '📊 Get Results';
-        button.className = 'perf-analyzer-floating-btn';
+        button.innerHTML = '⏳ Fetching Results... 0%';
+        button.className = 'perf-analyzer-floating-btn fetching';
         
         // Make button draggable
         this.makeDraggable(button);
         
         button.addEventListener('click', () => {
+            // Get current button state
+            const buttonText = button.innerHTML;
+            const isViewResultsState = buttonText.includes('View Results');
+            const isFetchingState = buttonText.includes('Fetching Results');
+            const isRetryState = buttonText.includes('Retry') || buttonText.includes('Error');
+            
+            console.log('🔍 Button click debug:', {
+                buttonText,
+                isViewResultsState,
+                isFetchingState,
+                isRetryState,
+                isAnalyzing: this.isAnalyzing,
+                hasCache: !!this.dataCache,
+                cacheAge: this.cacheTimestamp ? (Date.now() - this.cacheTimestamp) / 1000 + 's' : 'no cache',
+                improvementsCount: this.improvementArray.length,
+                regressionsCount: this.regressionArray.length
+            });
+            
+            // PRIORITY 1: If button shows "View Results", show data immediately - NO CHECKS, NO RE-FETCHING
+            if (isViewResultsState) {
+                console.log('⚡ INSTANT: Button shows "View Results" - showing data immediately');
+                this.showResults();
+                return; // Exit immediately - no further processing
+            }
+            
+            // PRIORITY 2: Handle retry states - restart background fetch
+            if (isRetryState) {
+                console.log('🔄 RETRY: User clicked retry button - starting background fetch');
+                button.innerHTML = '⏳ Fetching Results... 0%';
+                button.classList.remove('data-ready', 'retry', 'error');
+                button.classList.add('fetching');
+                
+                // Clear old cache and restart background fetch
+                this.dataCache = null;
+                this.cacheTimestamp = null;
+                this.improvementArray = [];
+                this.regressionArray = [];
+                
+                // Start background fetch
+                setTimeout(() => {
+                    this.fetchDataInBackground();
+                }, 1000); // Give a moment for UI to update
+                
+                return;
+            }
+            
+            // PRIORITY 3: Handle fetching state - provide user feedback
+            if (isFetchingState || this.isAnalyzing) {
+                console.log('⏳ FETCHING: Data extraction in progress - showing feedback');
+                
+                // Check if data is actually ready but button hasn't updated yet
+                const now = Date.now();
+                const hasValidCache = this.dataCache && this.cacheTimestamp && (now - this.cacheTimestamp < this.cacheTimeout);
+                const hasDataArrays = this.improvementArray.length > 0 || this.regressionArray.length > 0;
+                
+                if (hasValidCache && hasDataArrays) {
+                    console.log('⚡ SURPRISE: Data actually ready! Showing immediately');
+                    // Update button state and show results
+                    button.innerHTML = '📊 View Results';
+                    button.classList.remove('fetching');
+                    button.classList.add('data-ready');
+                    this.showResults();
+                    return;
+                }
+                
+                // Provide visual feedback that click was registered
+                const originalText = button.innerHTML;
+                button.innerHTML = '⏳ Please wait...';
+                button.style.transform = 'scale(0.95)';
+                
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.style.transform = 'scale(1)';
+                }, 500);
+                
+                return; // Don't start another analysis
+            }
+            
+            // PRIORITY 4: Check if we have valid cached data (for other button states)
+            const now = Date.now();
+            const hasValidCache = this.dataCache && this.cacheTimestamp && (now - this.cacheTimestamp < this.cacheTimeout);
+            const hasDataArrays = this.improvementArray.length > 0 || this.regressionArray.length > 0;
+            
+            if (hasValidCache && hasDataArrays) {
+                console.log('⚡ INSTANT: Using cached data arrays');
+                this.showResults();
+                return; // Exit immediately
+            }
+            
+            if (hasValidCache && this.dataCache) {
+                console.log('⚡ INSTANT: Restoring from cache object');
+                this.improvementArray = [...this.dataCache.improvements];
+                this.regressionArray = [...this.dataCache.regressions];
+                this.showResults();
+                return; // Exit immediately
+            }
+            
+            // PRIORITY 5: Only start fresh analysis if no cache and not already analyzing
             if (!this.isAnalyzing) {
+                console.log('🔄 FRESH: Starting new data analysis');
+                button.innerHTML = '⏳ Fetching Results... 0%';
+                button.classList.add('fetching');
+                button.classList.remove('data-ready');
                 this.analyzePerformanceData();
+            } else {
+                console.log('⏳ WAIT: Analysis already in progress - this should not happen');
             }
         });
 
@@ -201,6 +426,9 @@ class PerformanceAnalyzer {
                                 ⬆️ Improvements
                             </button>
                         </div>
+                        <button class="export-button" id="export-excel-btn" title="Export to Excel">
+                            📋 Export Excel
+                        </button>
                     </div>
                 </div>
                 <div class="perf-analyzer-loading" id="perf-loading">
@@ -436,6 +664,27 @@ perfAnalyzer.extractData()
         this.updateStats();
     }
 
+    showResults() {
+        // Show results container
+        const resultsContainer = document.getElementById('perf-analyzer-results');
+        resultsContainer.classList.remove('hidden');
+        this.isVisible = true;
+        
+        // Hide loading and show data immediately
+        const loadingDiv = document.getElementById('perf-loading');
+        const dataDiv = document.getElementById('perf-data');
+        loadingDiv.style.display = 'none';
+        dataDiv.style.display = 'block';
+        
+        // Add event listeners for window controls
+        this.addWindowControlListeners();
+        
+        // Display the cached results immediately
+        this.displayResults();
+        
+        console.log('✅ Showing cached results instantly');
+    }
+
     async analyzePerformanceData() {
         if (this.isAnalyzing) return;
         
@@ -473,17 +722,25 @@ perfAnalyzer.extractData()
         dataDiv.style.display = 'none';
 
         try {
-            await this.extractData();
+            const result = await this.extractData();
             
-            // Cache the results
-            this.dataCache = {
-                improvements: [...this.improvementArray],
-                regressions: [...this.regressionArray]
-            };
-            this.cacheTimestamp = Date.now();
-            console.log('💾 Data cached successfully');
-            
-            this.displayResults();
+            if (result && result.success) {
+                // Use the returned arrays
+                this.improvementArray = result.improvements || [];
+                this.regressionArray = result.regressions || [];
+                
+                // Cache the results
+                this.dataCache = {
+                    improvements: [...this.improvementArray],
+                    regressions: [...this.regressionArray]
+                };
+                this.cacheTimestamp = Date.now();
+                console.log('💾 Data cached successfully');
+                
+                this.displayResults();
+            } else {
+                throw new Error(result ? result.message : 'Data extraction failed');
+            }
         } catch (error) {
             console.error('Error analyzing performance data:', error);
             // Show a more helpful error message for first-time failures
@@ -491,10 +748,26 @@ perfAnalyzer.extractData()
                 ? 'Page may still be loading. Please wait a moment and try again.'
                 : error.message;
             this.showError(errorMessage);
+            
+            // Reset button on error
+            const button = document.getElementById('perf-analyzer-btn');
+            if (button) {
+                button.innerHTML = '⏳ Fetching Results... 0%';
+                button.classList.remove('fetching', 'data-ready');
+                button.classList.add('fetching');
+            }
         } finally {
             this.isAnalyzing = false;
             loadingDiv.style.display = 'none';
             dataDiv.style.display = 'block';
+            
+            // Update button to show results are ready
+            const button = document.getElementById('perf-analyzer-btn');
+            if (button && (this.improvementArray.length > 0 || this.regressionArray.length > 0)) {
+                button.innerHTML = '📊 View Results';
+                button.classList.remove('fetching');
+                button.classList.add('data-ready');
+            }
         }
     }
 
@@ -503,6 +776,7 @@ perfAnalyzer.extractData()
         const closeBtn = document.getElementById('close-btn');
         const tabRegressions = document.getElementById('tab-regressions');
         const tabImprovements = document.getElementById('tab-improvements');
+        const exportBtn = document.getElementById('export-excel-btn');
         
         if (closeBtn && !closeBtn.hasAttribute('data-listener-added')) {
             closeBtn.addEventListener('click', () => this.closeResults());
@@ -517,6 +791,23 @@ perfAnalyzer.extractData()
         if (tabImprovements && !tabImprovements.hasAttribute('data-listener-added')) {
             tabImprovements.addEventListener('click', () => this.switchTab('improvements'));
             tabImprovements.setAttribute('data-listener-added', 'true');
+        }
+        
+        if (exportBtn && !exportBtn.hasAttribute('data-listener-added')) {
+            exportBtn.addEventListener('click', () => this.exportToExcel());
+            exportBtn.setAttribute('data-listener-added', 'true');
+            
+            // Update button text based on XLSX availability
+            if (typeof XLSX === 'undefined') {
+                exportBtn.textContent = '❌ Excel (Library Missing)';
+                exportBtn.disabled = true;
+                exportBtn.title = 'Excel export library not loaded';
+            } else {
+                exportBtn.textContent = '📋 Export Excel';
+                exportBtn.disabled = false;
+                exportBtn.title = 'Export to Excel';
+                console.log('✅ Excel export button ready');
+            }
         }
     }
 
@@ -620,8 +911,14 @@ perfAnalyzer.extractData()
     async extractData() {
         console.log('🚀 Starting data extraction using proven approach...');
         
+        // Update progress - step 1: Page loading
+        this.updateProgress(10, 'Loading page');
+        
         // Wait for page to fully load first
         await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Update progress - step 2: Finding elements
+        this.updateProgress(25, 'Finding elements');
         
         // Reset arrays
         this.improvementArray = [];
@@ -643,6 +940,9 @@ perfAnalyzer.extractData()
                 throw new Error('Could not find P0 wrapper elements using the expected selectors. Please ensure the page has fully loaded.');
             }
             
+            // Update progress - step 3: Validating wrappers
+            this.updateProgress(40, 'Validating elements');
+            
             // Validate the wrappers
             const improvementTitle = P0ImprovementWrapperDiv.childNodes[0]?.textContent;
             const regressionTitle = P0RegressionWrapperDiv.childNodes[0]?.textContent;
@@ -661,17 +961,39 @@ perfAnalyzer.extractData()
             P0ImprovementWrapperDiv.id = 'P0ImprovementsWrapper';
             P0RegressionWrapperDiv.id = 'P0RegressionsWrapper';
             
+            // Update progress - step 4: Starting data extraction
+            this.updateProgress(50, 'Extracting data');
+            
             // Extract data from both wrappers using the proven method
             await Promise.all([
-                this.grabWrapperData(P0ImprovementWrapperDiv, this.improvementArray, 'improvements'),
-                this.grabWrapperData(P0RegressionWrapperDiv, this.regressionArray, 'regressions')
+                this.grabWrapperDataWithProgress(P0ImprovementWrapperDiv, this.improvementArray, 'improvements', 50, 75),
+                this.grabWrapperDataWithProgress(P0RegressionWrapperDiv, this.regressionArray, 'regressions', 75, 95)
             ]);
+            
+            // Update progress - step 5: Finalizing
+            this.updateProgress(100, 'Complete');
             
             console.log(`✅ Extraction complete. Found ${this.improvementArray.length} improvements and ${this.regressionArray.length} regressions.`);
             
+            // Return success result
+            return {
+                success: true,
+                improvements: this.improvementArray,
+                regressions: this.regressionArray,
+                message: `Found ${this.improvementArray.length} improvements and ${this.regressionArray.length} regressions`
+            };
+            
         } catch (error) {
             console.error('❌ Extraction failed:', error);
-            throw error;
+            
+            // Return failure result instead of throwing
+            return {
+                success: false,
+                improvements: [],
+                regressions: [],
+                message: error.message,
+                error: error
+            };
         }
     }
 
@@ -786,6 +1108,63 @@ perfAnalyzer.extractData()
                 window.setTimeout(() => this.listPageIterator(wrapper, listPageHandler, targetPage + 1, totalPage, finishCallback), 100);
             } else {
                 window.setTimeout(finishCallback, 0);
+            }
+        });
+    }
+
+    async grabWrapperDataWithProgress(wrapper, targetArray, name, startProgress, endProgress) {
+        console.log(`📊 Starting extraction for ${name}...`);
+        
+        try {
+            const pageIndicator = this.getPageIndicatorFromWrapper(wrapper.id);
+            if (!pageIndicator) {
+                console.warn(`No page indicator found for ${name}, extracting current page only`);
+                this.updateProgress(Math.round((startProgress + endProgress) / 2), `Processing ${name}`);
+                const handler = this.listPageHandlerBuilder(wrapper, targetArray);
+                handler();
+                this.updateProgress(endProgress, `Completed ${name}`);
+                return;
+            }
+            
+            const pageInfo = this.parsePageIndicator(pageIndicator);
+            console.log(`📄 ${name}: Processing ${pageInfo.totalPage} pages`);
+            
+            return new Promise((resolve) => {
+                this.listPageIteratorWithProgress(
+                    wrapper,
+                    this.listPageHandlerBuilder(wrapper, targetArray),
+                    1,
+                    pageInfo.totalPage,
+                    startProgress,
+                    endProgress,
+                    name,
+                    () => {
+                        console.log(`✅ ${name}: Extracted ${targetArray.length} items from ${pageInfo.totalPage} pages`);
+                        this.updateProgress(endProgress, `Completed ${name}`);
+                        resolve();
+                    }
+                );
+            });
+            
+        } catch (error) {
+            console.error(`❌ Error extracting ${name}:`, error);
+        }
+    }
+
+    listPageIteratorWithProgress(wrapper, listPageHandler, targetPage, totalPage, startProgress, endProgress, name, finishCallback) {
+        // Calculate progress based on current page
+        const pageProgress = startProgress + ((targetPage - 1) / totalPage) * (endProgress - startProgress);
+        this.updateProgress(Math.round(pageProgress), `Processing ${name} (${targetPage}/${totalPage})`);
+        
+        this.navigateToPage(targetPage, wrapper, () => {
+            listPageHandler();
+            if (targetPage < totalPage) {
+                setTimeout(() => 
+                    this.listPageIteratorWithProgress(wrapper, listPageHandler, targetPage + 1, totalPage, startProgress, endProgress, name, finishCallback), 
+                    100
+                );
+            } else {
+                setTimeout(finishCallback, 0);
             }
         });
     }
@@ -1100,15 +1479,14 @@ perfAnalyzer.extractData()
         const improvements = this.improvementArray.length;
         const regressions = this.regressionArray.length;
         
-        const currentCount = this.activeTab === 'improvements' ? improvements : regressions;
-        const currentType = this.activeTab === 'improvements' ? 'improvements' : 'regressions';
-        
+        // Keep the stats display consistent regardless of active tab
+        // This prevents the header from shifting when switching tabs
         statsDiv.innerHTML = `
             <span class="stat-item improvements">${improvements} improvements</span>
             <span class="stat-divider">•</span>
             <span class="stat-item regressions">${regressions} regressions</span>
             <span class="stat-divider">•</span>
-            <span class="stat-item">Viewing ${currentCount} ${currentType}</span>
+            <span class="stat-item">Total: ${improvements + regressions} items</span>
         `;
     }
 
@@ -1133,7 +1511,7 @@ perfAnalyzer.extractData()
                                 Group <span class="sort-indicator" id="sort-${type}-group"></span>
                             </th>
                             <th class="table-header" data-column="percentChange" data-type="${type}">
-                                Change % <span class="sort-indicator" id="sort-${type}-percentChange">▼</span>
+                                Percent Change <span class="sort-indicator" id="sort-${type}-percentChange">▼</span>
                             </th>
                             <th class="table-header" data-column="baselineValue" data-type="${type}">
                                 Baseline <span class="sort-indicator" id="sort-${type}-baselineValue"></span>
@@ -1146,13 +1524,10 @@ perfAnalyzer.extractData()
                     <tbody id="${tableId}-body">
         `;
 
-        // Sort data by percentChange descending by default
+        // Sort data by percentChange descending by default (bigger values on top)
         const sortedData = [...data].sort((a, b) => {
-            if (type === 'improvement') {
-                return b.percentChange - a.percentChange; // Highest improvements first
-            } else {
-                return a.percentChange - b.percentChange; // Most negative regressions first
-            }
+            // For both improvements and regressions, show bigger absolute values first
+            return Math.abs(b.percentChange) - Math.abs(a.percentChange);
         });
 
         sortedData.forEach(item => {
@@ -1290,6 +1665,226 @@ perfAnalyzer.extractData()
                 </div>
             </div>
         `;
+    }
+
+    async exportToExcel() {
+        // Check if XLSX library is available
+        if (typeof XLSX === 'undefined') {
+            console.error('❌ XLSX library not loaded');
+            alert('Excel export library is not available. Please reload the page and try again.');
+            return;
+        }
+
+        if (!this.dataCache || (!this.regressionArray.length && !this.improvementArray.length)) {
+            alert('No data available to export. Please analyze performance data first.');
+            return;
+        }
+
+        console.log('📊 Starting Excel export with XLSX library');
+
+        try {
+            // Create a new workbook
+            const workbook = XLSX.utils.book_new();
+
+            // Prepare regression data
+            const regressionData = this.regressionArray.map(item => ({
+                'Benchmark': item.benchmark,
+                'Story': item.story,
+                'Metric': item.metric,
+                'Group': item.group,
+                'Percent Change': item.percentChange + '%',
+                'Baseline Value': item.baselineValue,
+                'Comparison Value': item.comparisonValue,
+                'Unit': item.unit,
+                'Type': 'Regression'
+            }));
+
+            // Prepare improvement data
+            const improvementData = this.improvementArray.map(item => ({
+                'Benchmark': item.benchmark,
+                'Story': item.story,
+                'Metric': item.metric,
+                'Group': item.group,
+                'Percent Change': item.percentChange + '%',
+                'Baseline Value': item.baselineValue,
+                'Comparison Value': item.comparisonValue,
+                'Unit': item.unit,
+                'Type': 'Improvement'
+            }));
+
+            // Create worksheets
+            if (regressionData.length > 0) {
+                const regressionSheet = XLSX.utils.json_to_sheet(regressionData);
+                
+                // Set column widths for better readability
+                regressionSheet['!cols'] = [
+                    { width: 25 }, // Benchmark
+                    { width: 20 }, // Story
+                    { width: 20 }, // Metric
+                    { width: 15 }, // Group
+                    { width: 15 }, // Percent Change
+                    { width: 15 }, // Baseline Value
+                    { width: 15 }, // Comparison Value
+                    { width: 10 }, // Unit
+                    { width: 12 }  // Type
+                ];
+                
+                // Freeze the first row (header)
+                regressionSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
+                
+                // Make header row bold - ensure style object exists first
+                const headerCells = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'I1'];
+                headerCells.forEach(cellRef => {
+                    if (regressionSheet[cellRef]) {
+                        // Initialize style object if it doesn't exist
+                        if (!regressionSheet[cellRef].s) {
+                            regressionSheet[cellRef].s = {};
+                        }
+                        if (!regressionSheet[cellRef].s.font) {
+                            regressionSheet[cellRef].s.font = {};
+                        }
+                        regressionSheet[cellRef].s.font.bold = true;
+                        
+                        console.log(`✅ Applied bold formatting to regression header cell ${cellRef}`);
+                    }
+                });
+                
+                XLSX.utils.book_append_sheet(workbook, regressionSheet, 'P0 Regressions');
+                console.log('📊 Added regressions sheet with formatting');
+            }
+
+            if (improvementData.length > 0) {
+                const improvementSheet = XLSX.utils.json_to_sheet(improvementData);
+                
+                // Set column widths for better readability
+                improvementSheet['!cols'] = [
+                    { width: 25 }, // Benchmark
+                    { width: 20 }, // Story
+                    { width: 20 }, // Metric
+                    { width: 15 }, // Group
+                    { width: 15 }, // Percent Change
+                    { width: 15 }, // Baseline Value
+                    { width: 15 }, // Comparison Value
+                    { width: 10 }, // Unit
+                    { width: 12 }  // Type
+                ];
+                
+                // Freeze the first row (header)
+                improvementSheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
+                
+                // Make header row bold - ensure style object exists first
+                const headerCells = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'I1'];
+                headerCells.forEach(cellRef => {
+                    if (improvementSheet[cellRef]) {
+                        // Initialize style object if it doesn't exist
+                        if (!improvementSheet[cellRef].s) {
+                            improvementSheet[cellRef].s = {};
+                        }
+                        if (!improvementSheet[cellRef].s.font) {
+                            improvementSheet[cellRef].s.font = {};
+                        }
+                        improvementSheet[cellRef].s.font.bold = true;
+                        
+                        console.log(`✅ Applied bold formatting to improvement header cell ${cellRef}`);
+                    }
+                });
+                
+                XLSX.utils.book_append_sheet(workbook, improvementSheet, 'P0 Improvements');
+                console.log('📊 Added improvements sheet with formatting');
+            }
+
+            // Create summary sheet
+            const summaryData = [
+                { 'Category': 'P0 Regressions', 'Count': this.regressionArray.length },
+                { 'Category': 'P0 Improvements', 'Count': this.improvementArray.length },
+                { 'Category': 'Total Items', 'Count': this.regressionArray.length + this.improvementArray.length },
+                { 'Category': 'Export Date', 'Count': new Date().toLocaleString() },
+                { 'Category': 'Source URL', 'Count': window.location.href }
+            ];
+            
+            const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+            summarySheet['!cols'] = [{ width: 20 }, { width: 50 }];
+            
+            // Freeze the first row (header) and make it bold
+            summarySheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2' };
+            const summaryHeaderCells = ['A1', 'B1'];
+            summaryHeaderCells.forEach(cellRef => {
+                if (summarySheet[cellRef]) {
+                    // Initialize style object if it doesn't exist
+                    if (!summarySheet[cellRef].s) {
+                        summarySheet[cellRef].s = {};
+                    }
+                    if (!summarySheet[cellRef].s.font) {
+                        summarySheet[cellRef].s.font = {};
+                    }
+                    summarySheet[cellRef].s.font.bold = true;
+                    
+                    console.log(`✅ Applied bold formatting to summary header cell ${cellRef}`);
+                }
+            });
+            
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+            const filename = `Pantheon_Performance_Analysis_${timestamp}.xlsx`;
+
+            // Use chrome.downloads API for better file saving experience
+            if (chrome && chrome.downloads) {
+                // Convert workbook to array buffer
+                const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                
+                // Create object URL
+                const url = URL.createObjectURL(blob);
+                
+                // Use Chrome downloads API to show save dialog
+                chrome.downloads.download({
+                    url: url,
+                    filename: filename,
+                    saveAs: true // This will show the save dialog
+                }, (downloadId) => {
+                    if (chrome.runtime.lastError) {
+                        console.error('Download error:', chrome.runtime.lastError);
+                        // Fallback to direct download
+                        this.fallbackDownload(workbook, filename);
+                    } else {
+                        console.log('📁 Excel file download started:', filename);
+                        // Clean up the object URL after a short delay
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    }
+                });
+            } else {
+                // Fallback for browsers without chrome.downloads API
+                this.fallbackDownload(workbook, filename);
+            }
+
+        } catch (error) {
+            console.error('❌ Error exporting to Excel:', error);
+            alert('Failed to export Excel file. Please try again.');
+        }
+    }
+
+    fallbackDownload(workbook, filename) {
+        // Fallback download method
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        
+        console.log('📁 Excel file downloaded:', filename);
     }
 
     showError(message) {

@@ -5,7 +5,8 @@
   "description": "Extracts and formats P0 regression and improvement data from performance comparison pages",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "downloads"
   ],
   "host_permissions": [
     "https://edgeteam.ms/*"
@@ -13,7 +14,7 @@
   "content_scripts": [
     {
       "matches": ["https://edgeteam.ms/perf-lab/perf-comparison-requests/details/*"],
-      "js": ["content.js"],
+      "js": ["xlsx.min.js", "content.js"],
       "css": ["styles.css"]
     }
   ],
