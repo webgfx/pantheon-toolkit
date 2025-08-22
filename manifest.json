@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Pantheon Toolkit",
+  "version": "1.0.0",
+  "description": "Extracts and formats P0 regression and improvement data from performance comparison pages",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://edgeteam.ms/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://edgeteam.ms/perf-lab/perf-comparison-requests/details/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Get Results"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
