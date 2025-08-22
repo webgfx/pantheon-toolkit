@@ -83,6 +83,12 @@ class PerformanceAnalyzer {
             console.log('📊 Background data extraction starting...');
             this.isAnalyzing = true;
             
+            // Notify background script that analysis started
+            chrome.runtime.sendMessage({ 
+                action: 'analysisStarted',
+                timestamp: Date.now()
+            }).catch(err => console.log('Background message failed:', err));
+            
             // Update button to show background processing
             const button = document.getElementById('perf-analyzer-btn');
             if (button) {
@@ -107,6 +113,16 @@ class PerformanceAnalyzer {
                 this.regressionArray = result.regressions || [];
                 
                 console.log(`✅ Background fetch complete: ${this.regressionArray.length} regressions, ${this.improvementArray.length} improvements`);
+                
+                // Notify background script with extracted data
+                chrome.runtime.sendMessage({ 
+                    action: 'dataExtracted',
+                    data: {
+                        regressions: this.regressionArray,
+                        improvements: this.improvementArray
+                    },
+                    timestamp: Date.now()
+                }).catch(err => console.log('Background message failed:', err));
                 
                 // Update button to show data is ready
                 if (button) {
@@ -152,6 +168,13 @@ class PerformanceAnalyzer {
             }
         } finally {
             this.isAnalyzing = false;
+            
+            // Notify background script that analysis completed
+            chrome.runtime.sendMessage({ 
+                action: 'analysisCompleted',
+                timestamp: Date.now()
+            }).catch(err => console.log('Background message failed:', err));
+            
             console.log('🏁 Background fetch finally block - isAnalyzing set to false');
         }
     }
