@@ -1002,11 +1002,8 @@ perfAnalyzer.extractData()
             // Update progress - step 4: Starting data extraction
             this.updateProgress(50, 'Extracting data');
             
-            // Extract data from both wrappers using the proven method
-            await Promise.all([
-                this.grabWrapperDataWithProgress(P0ImprovementWrapperDiv, this.improvementArray, 'improvements', 50, 75),
-                this.grabWrapperDataWithProgress(P0RegressionWrapperDiv, this.regressionArray, 'regressions', 75, 95)
-            ]);
+            // Extract data from both wrappers simultaneously with combined progress
+            await this.extractBothWrappersWithCombinedProgress(P0ImprovementWrapperDiv, P0RegressionWrapperDiv);
             
             // Update progress - step 5: Finalizing
             this.updateProgress(100, 'Complete');
@@ -1146,6 +1143,112 @@ perfAnalyzer.extractData()
                 window.setTimeout(() => this.listPageIterator(wrapper, listPageHandler, targetPage + 1, totalPage, finishCallback), 100);
             } else {
                 window.setTimeout(finishCallback, 0);
+            }
+        });
+    }
+
+    async extractBothWrappersWithCombinedProgress(improvementWrapper, regressionWrapper) {
+        console.log('📊 Starting combined extraction for improvements and regressions...');
+        
+        // Get page counts for both wrappers to calculate total work
+        const improvementPageIndicator = this.getPageIndicatorFromWrapper(improvementWrapper.id);
+        const regressionPageIndicator = this.getPageIndicatorFromWrapper(regressionWrapper.id);
+        
+        let improvementPages = 1;
+        let regressionPages = 1;
+        
+        if (improvementPageIndicator) {
+            const improvementPageInfo = this.parsePageIndicator(improvementPageIndicator);
+            improvementPages = improvementPageInfo.totalPage;
+        }
+        
+        if (regressionPageIndicator) {
+            const regressionPageInfo = this.parsePageIndicator(regressionPageIndicator);
+            regressionPages = regressionPageInfo.totalPage;
+        }
+        
+        const totalPages = improvementPages + regressionPages;
+        console.log(`📄 Total work: ${improvementPages} improvement pages + ${regressionPages} regression pages = ${totalPages} total pages`);
+        
+        let completedPages = 0;
+        
+        // Helper function to update combined progress
+        const updateCombinedProgress = (pagesCompleted, currentTask) => {
+            const progressPercent = 50 + Math.round((pagesCompleted / totalPages) * 45); // 50-95% range
+            this.updateProgress(progressPercent, `${currentTask} (${pagesCompleted}/${totalPages} pages)`);
+        };
+        
+        // Process improvements first
+        if (improvementPageIndicator) {
+            const improvementPageInfo = this.parsePageIndicator(improvementPageIndicator);
+            console.log(`📊 Processing ${improvementPageInfo.totalPage} improvement pages...`);
+            
+            await new Promise((resolve) => {
+                this.listPageIteratorWithCombinedProgress(
+                    improvementWrapper,
+                    this.listPageHandlerBuilder(improvementWrapper, this.improvementArray),
+                    1,
+                    improvementPageInfo.totalPage,
+                    'Extracting improvements',
+                    (currentPage) => {
+                        completedPages = currentPage; // Set to current page number, not add
+                        updateCombinedProgress(completedPages, 'Extracting improvements');
+                    },
+                    resolve
+                );
+            });
+        } else {
+            console.log('📊 Processing single page of improvements...');
+            const handler = this.listPageHandlerBuilder(improvementWrapper, this.improvementArray);
+            handler();
+            completedPages = 1;
+            updateCombinedProgress(completedPages, 'Extracting improvements');
+        }
+        
+        // Process regressions second
+        if (regressionPageIndicator) {
+            const regressionPageInfo = this.parsePageIndicator(regressionPageIndicator);
+            console.log(`📊 Processing ${regressionPageInfo.totalPage} regression pages...`);
+            
+            await new Promise((resolve) => {
+                this.listPageIteratorWithCombinedProgress(
+                    regressionWrapper,
+                    this.listPageHandlerBuilder(regressionWrapper, this.regressionArray),
+                    1,
+                    regressionPageInfo.totalPage,
+                    'Extracting regressions',
+                    (currentPage) => {
+                        completedPages = improvementPages + currentPage; // Improvement pages + current regression page
+                        updateCombinedProgress(completedPages, 'Extracting regressions');
+                    },
+                    resolve
+                );
+            });
+        } else {
+            console.log('📊 Processing single page of regressions...');
+            const handler = this.listPageHandlerBuilder(regressionWrapper, this.regressionArray);
+            handler();
+            completedPages = improvementPages + 1;
+            updateCombinedProgress(completedPages, 'Extracting regressions');
+        }
+        
+        console.log(`✅ Combined extraction complete: ${this.improvementArray.length} improvements + ${this.regressionArray.length} regressions`);
+    }
+
+    listPageIteratorWithCombinedProgress(wrapper, listPageHandler, targetPage, totalPage, taskName, progressCallback, finishCallback) {
+        this.navigateToPage(targetPage, wrapper, () => {
+            listPageHandler();
+            
+            // Report progress for this page
+            progressCallback(targetPage);
+            
+            if (targetPage < totalPage) {
+                setTimeout(() => 
+                    this.listPageIteratorWithCombinedProgress(wrapper, listPageHandler, targetPage + 1, totalPage, taskName, progressCallback, finishCallback), 
+                    100
+                );
+            } else {
+                setTimeout(finishCallback, 0);
             }
         });
     }

@@ -352,9 +352,9 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  max-width: 95vw;
+  max-width: 98vw;
   max-height: 90vh;
-  width: 1200px;
+  width: 1600px; /* Increased from 1200px to fit all columns properly */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -372,6 +372,7 @@
 .perf-table-container {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
+  overflow-x: hidden; /* Prevent horizontal scrolling */
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -380,6 +381,8 @@
   width: 100%;
   border-collapse: collapse;
   background: white;
+  table-layout: fixed; /* Fixed layout to control column widths */
+  min-width: 1500px; /* Ensure table has enough width for all columns */
 }
 
 .perf-table thead {
@@ -432,15 +435,17 @@
 }
 
 .text-cell {
-  max-width: 200px;
+  max-width: 300px; /* Increased from 200px for better readability */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  word-wrap: break-word;
 }
 
 .change-cell {
-  width: 120px;
+  width: 150px; /* Increased from 120px for better display */
   text-align: center;
+  min-width: 150px;
 }
 
 .change-value {
@@ -532,17 +537,40 @@
 }
 
 /* Responsive */
+@media (max-width: 1600px) {
+  .perf-analyzer-content {
+    width: 95vw;
+    max-width: 95vw;
+  }
+  
+  .perf-table {
+    min-width: 1200px; /* Reduced minimum for medium screens */
+  }
+  
+  .text-cell {
+    max-width: 250px;
+  }
+  
+  .change-cell {
+    width: 130px;
+  }
+}
+
 @media (max-width: 1200px) {
   .perf-analyzer-content {
-    width: 98%;
-    height: 95%;
+    width: 98vw;
+    max-width: 98vw;
+  }
+  
+  .perf-table {
+    min-width: 1000px;
   }
   
   .text-cell {
     max-width: 150px;
   }
   
-  .value-cell {
+  .change-cell {
     width: 120px;
   }
 }
